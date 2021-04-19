@@ -28,7 +28,6 @@ services:
     networks:
       default:
         ipv4_address: ${ORION_LD_IP}
-
     ports:
       - "${ORION_LD_PORT}:${ORION_LD_PORT}" # localhost:1026
     command: -dbhost mongo-db -logLevel DEBUG
@@ -57,7 +56,7 @@ services:
       - "CYGNUS_API_PORT=${CYGNUS_API_PORT}" # Port that Cygnus listens on for operational reasons
       - "CYGNUS_LOG_LEVEL=DEBUG" # The logging level for Cygnus
     healthcheck:
-      test: curl --fail -s http://localhost:${CYGNUS_API_ADMIN_PORT}/v1/version || exit 1
+      test: curl --fail -s http://localhost:${CYGNUS_API_PORT}/v1/version || exit 1
 
   # Databases: ElasticSearch DB to persist Context Broker entities
   elasticsearch-db:

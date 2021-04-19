@@ -117,7 +117,7 @@ to follow the instructions found [here](https://docs.docker.com/compose/install/
 
 You can check your current **Docker** and **Docker Compose** versions using the following commands:
 
-```console
+```bash
 docker-compose -v
 docker version
 ```
@@ -141,7 +141,7 @@ operating system. Follow the instructions described [here](https://httpie.io/doc
 Before you start you should ensure that you have obtained or built the necessary Docker images locally. Please clone the
 repository and create the necessary images by running the commands as shown:
 
-```console
+```bash
 git clone https://github.com/flopezag/tutorials.OrionLD-Cygnus-ElasticSearch.git
 cd tutorials.OrionLD-Cygnus-ElasticSearch
 
@@ -154,7 +154,7 @@ Thereafter, all services can be initialized from the command-line by running the
 [services](https://github.com/flopezag/tutorials.OrionLD-Cygnus-ElasticSearch/blob/main/services)
 Bash script provided within the repository:
 
-```console
+```bash
 ./services <command>
 ```
 
@@ -272,7 +272,7 @@ The `cygnus` container is driven by environment variables as shown:
 
 To start the system, run the following command:
 
-```console
+```bash
 ./services start
 ```
 
@@ -283,19 +283,23 @@ If the response is blank, this is usually because Cygnus is not running or is li
 
 #### Request:
 
-```console
-curl -X GET \
-  'http://localhost:5080/v1/version'
+```bash
+http localhost:5080/v1/version 
 ```
 
 #### Response:
 
 The response will look similar to the following:
 
-```json
+```bash
+HTTP/1.1 200 OK
+Content-Length: 78
+Content-Type: application/json; charset=utf-8
+Server: Jetty(6.1.26)
+
 {
     "success": "true",
-    "version": "1.18.0_SNAPSHOT.etc"
+    "version": "2.8.0.96887cf7500bcb046d5a54c121253096d0a8deb8"
 }
 ```
 
@@ -315,76 +319,30 @@ Once a dynamic context system is up and running, we need to inform **Cygnus** of
 making a subscription to the Orion Context Broker. Context brokers may offer additional custom payload formats
 (typically prefixed with an `x-`). The Orion-LD broker offers a backward compatible **NGSI-v2** 
 (`/ngsi-ld/v1/subscriptions`) payload option for legacy systems. This subscription type will fire when the `filling`
-level is below 0.4. The `format` attribute has been altered to inform the subscriber using NGSI-v2 normalized format.
+level is below 100. The `format` attribute has been altered to inform the subscriber using NGSI-v2 normalized format.
 
 ```bash
-curl -L -X POST 'http://localhost:1026/ngsi-ld/v1/subscriptions/' \
--H 'Content-Type: application/ld+json' \
---data-raw '{
-  "description": "Notify me of low feedstock on Farm:001",
+printf '{
+  "description": "Notify me of low energy on Blower2",
   "type": "Subscription",
-  "entities": [{"type": "FillingLevelSensor"}],
-  "watchedAttributes": ["filling"],
-  "q": "filling<0.4;controlledAsset==urn:ngsi-ld:Building:farm001",
+  "entities": [{"type": "Blower"}],
+  "watchedAttributes": ["energy"],
+  "q": "energy<100;controlledAsset==urn:ngsi-ld:Blower:Blower2",
   "notification": {
-    "attributes": ["filling", "controlledAsset"],
+    "attributes": ["energy", "controlledAsset"],
     "format": "x-ngsiv2-normalized",
     "endpoint": {
       "uri": "http://cygnus:5058/notify",
       "accept": "application/json"
     }
   },
-   "@context": "http://context-provider:3000/data-models/ngsi-context.jsonld"
-}'
+  "@context": "https://smartdatamodels.org/context.jsonld"
+}' | http  POST http://localhost:1026/ngsi-ld/v1/subscriptions \
+ Content-Type:'application/ld+json'
 ```
 
 As you can see, the database used to persist context data has no impact on the details of the subscription. It is the
 same for each database. The response will be **201 - Created**
-
-#### Subscription Payload:
-
-When a `low-stock-farm001-ngsiv2` event is fired, the response is a normalized NGSI-v2 payload as shown:
-
-```json
-{
-    "subscriptionId": "urn:ngsi-ld:Subscription:5fd1f31e8b9b83697b855a5d",
-    "data": [
-        {
-            "id": "urn:ngsi-ld:Device:filling001",
-            "type": "https://uri.etsi.org/ngsi-ld/default-context/FillingLevelSensor",
-            "https://w3id.org/saref#fillingLevel": {
-                "type": "Property",
-                "value": 0.33,
-                "metadata": {
-                    "unitCode": "C62",
-                    "accuracy": {
-                        "type": "Property",
-                        "value": 0.05
-                    },
-                    "observedAt": "2020-12-10T10:11:57.000Z"
-                }
-            },
-            "https://uri.etsi.org/ngsi-ld/default-context/controlledAsset": {
-                "type": "Relationship",
-                "value": "urn:ngsi-ld:Building:farm001",
-                "metadata": {
-                    "observedAt": "2020-12-10T10:11:57.000Z"
-                }
-            }
-        }
-    ]
-}
-```
-
-As can be seen, by default the attributes are returned using URN long names. It is also possible to request that the
-Orion-LD context broker pre-applies a compaction operation to the payload.
-
--   `x-nsgiv2-keyValues` - Key-value pairs with URN attribute names
--   `x-nsgiv2-keyValues-compacted` - Key-value pairs with short name attribute aliases
--   `x-ngsiv2-normalized` - NGSI-v2 normalized payload with URN attribute names
--   `x-ngsiv2-normalized-compacted`- NGSI-v2 normalized payload pairs with short name attribute aliases
-
-The set of available custom formats will vary between Context Brokers.
 
 ### Generating Context Data
 
@@ -393,6 +351,57 @@ dummy IoT Sensors can be used to do this. Open the device monitor page at `http:
 and unlock a **Smart Door** and switch on a **Smart Lamp**. Remember that the variable `TUTORIAL_APP_PORT` is defined
 in the `.env` file. This can be done by selecting an appropriate the command from the drop down list and pressing the
 `send` button. The stream of measurements coming from the devices can then be seen on the same page:
+
+```bash 
+printf '{
+  "@context": "https://smartdatamodels.org/context.jsonld",
+  "id": "urn:ngsi-ld:Blower:Blower2",
+  "type": "Blower",
+  "name": {
+    "type": "Property",
+    "value": "Blower 2"
+  },
+  "description": {
+    "type": "Property",
+    "value": "Blower 2 providing aeration for wastewater treatment process."
+  },
+  "airflow": {
+    "type": "Property",
+    "value": 368.75
+  },
+  "energy": {
+    "type": "Property",
+    "value": 29.89
+  },
+  "pressure": {
+    "type": "Property",
+    "value": 84.06
+  }
+}' | http POST 'http://localhost:1026/ngsi-ld/v1/entities/' \
+  Content-Type:'application/ld+json'
+```
+
+It will return the following content:
+
+```bash
+HTTP/1.1 201 Created
+Connection: Keep-Alive
+Content-Length: 0
+Date: Mon, 19 Apr 2021 14:11:53 GMT
+Location: /ngsi-ld/v1/entities/urn:ngsi-ld:Blower:Blower3
+
+
+```
+
+Update con context
+
+```bash
+printf '{
+      "type": "Property",
+      "value": 28.87
+}' | http PATCH http://localhost:1026/ngsi-ld/v1/entities/urn:ngsi-ld:Blower:Blower2/attrs/energy \
+  Link:'<https://smartdatamodels.org/context.jsonld>'
+```
 
 ## ElasticSearch - Reading Data from a database
 
@@ -406,8 +415,8 @@ To show the list of available databases, run the statement as shown:
 
 ### Query:
 
-```console
-curl -XGET 'localhost:9200/_cat/indices?v&pretty'
+```bash
+http 'localhost:9200/_cat/indices?v&pretty'
 ```
 
 ### Result:

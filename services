@@ -2,7 +2,7 @@
 #
 #  Command Line Interface to start all services associated with the Getting-Started Tutorial
 #
-#  For this tutorial the commands are merely a convenience script to run docker-compose
+#  For this tutorial the commands are merely a convenience script to run docker
 #
 
 set -e
@@ -15,38 +15,28 @@ if (( $# != 1 )); then
     exit 1
 fi
 
-waitForMongo () {
-	echo -e "\n⏳ Waiting for \033[1mMongoDB\033[0m to be available\n"
-	while ! [ `docker inspect --format='{{.State.Health.Status}}' db-mongo` == "healthy" ]
+waitForService() {
+	echo -e "\n⏳ Waiting for "$1" to be available"
+
+  status=$(docker inspect --format='{{.State.Health.Status}}' $2)
+	while ! [ $status == "healthy"  ]
 	do
-		sleep 1
+	  echo -e "    "$1" HTTP status: " $status
+	  sleep 2
+	  status=$(docker inspect --format='{{.State.Health.Status}}' $2)
 	done
-}
-
-waitForOrion () {
-	echo -e "\n⏳ Waiting for \033[1;34mOrionLD\033[0m to be available"
-
-	status=$(http -h http://localhost:1026/version 2>/dev/null | grep HTTP/ | awk '{print $2}')
-	while (( status != 200 ))
-	do
-	  echo -e "Context Broker HTTP state: $status (waiting for 200)"
-	  sleep 1
-	  status=$(http -h http://localhost:1026/version 2>/dev/null | grep HTTP/ | awk '{print $2}')
-	done
-
-  echo -e " \033[1;32mdone\033[0m"
 }
 
 displayServices () {
 	echo ""
-	docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" --filter name=fiware-*
+  docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" --filter name=fiware-* --filter name=db-*
 
   echo -e " \033[1;32mdone\033[0m"
 }
 
 addDatabaseIndex () {
 	echo -e "\n⏳ Adding appropriate \033[1mMongoDB\033[0m indexes for \033[1;34mOrionLD\033[0m  ..."
-	docker exec  mongo-db mongo --eval '
+	docker exec  db-mongo mongo --eval '
 	conn = new Mongo();db.createCollection("orion");
 	db = conn.getDB("orion");
 	db.createCollection("entities");
@@ -54,7 +44,7 @@ addDatabaseIndex () {
 	db.entities.createIndex({"_id.type": 1});
 	db.entities.createIndex({"_id.id": 1});' > /dev/null
 
-	docker exec  mongo-db mongo --eval '
+	docker exec  db-mongo mongo --eval '
 	conn = new Mongo();db.createCollection("orion-openiot");
 	db = conn.getDB("orion-openiot");
 	db.createCollection("entities");
@@ -67,14 +57,14 @@ addDatabaseIndex () {
 
 startContainers () {
 	echo ""
-	docker-compose --log-level ERROR -f docker-compose/docker-compose.yml -p fiware up -d --remove-orphans
+	docker-compose --log-level ERROR -f docker/docker-compose.yml -p fiware up -d --remove-orphans
 
   echo -e  " \033[1;32mdone\033[0m"
 }
 
 stoppingContainers () {
 	echo "Stopping containers"
-	docker-compose --log-level ERROR -f docker-compose/docker-compose.yml -p fiware down -v --remove-orphans
+	docker-compose --log-level ERROR -f docker/docker-compose.yml -p fiware down -v --remove-orphans
 
   printf " \033[1;32mdone\033[0m\n"
 }
@@ -87,17 +77,21 @@ case "${command}" in
   "start")
 		export $(cat .env | grep "#" -v)
 		stoppingContainers
-		echo -e "Starting five containers \033[1;34mOrionLD\033[0m, \033[1;34mCygnus\033[0m, \033[1;36ElacticSearch\033[0m, and a \033[1mMongoDB\033[0m."
+		echo -e "\nStarting four containers \033[1;34mOrionLD\033[0m, \033[1;34mCygnus\033[0m, \033[1;36mElacticSearch\033[0m, and a \033[1mMongoDB\033[0m."
 		echo -e "- \033[1;34mOrionLD\033[0m is the context broker"
 		echo -e "- \033[1;34mCygnus\033[0m is configured to write context data to ElasticSearch-DB only"
+		echo -e "- \033[1;36mElacticSearch\033[0m is the persist database"
 		echo ""
 		startContainers
-		waitForMongo
+		waitForService "\033[1mMongoDB\033[0m" db-mongo
 		addDatabaseIndex
-		waitForOrion
+		waitForService "\033[1;34mOrionLD\033[0m" fiware-orionld
+		waitForService "\033[1;36mElacticSearch\033[0m" db-elasticsearch
+		waitForService "\033[1;34mCygnus\033[0m" fiware-cygnus
 		displayServices
 		;;
 	"stop")
+		export $(cat .env | grep "#" -v)
 		stoppingContainers
 		;;
 	"create")
